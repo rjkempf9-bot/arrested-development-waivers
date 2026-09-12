@@ -175,8 +175,20 @@
     background:var(--bone);color:#161513;padding:10px 18px;border-radius:5px;
     font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.4);
     opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:50;
+    max-width:90vw;text-align:center;
   }
   .toast.show{opacity:1;}
+  .toast.success{background:var(--good);color:#fff;}
+  .confirm-banner{
+    display:none;align-items:center;gap:10px;
+    background:rgba(79,143,91,0.15);border:1px solid var(--good);border-radius:6px;
+    padding:12px 14px;margin-top:14px;font-size:14px;color:var(--bone);
+  }
+  .confirm-banner.show{display:flex;}
+  .confirm-banner .checkmark{
+    flex:0 0 22px;height:22px;border-radius:50%;background:var(--good);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;
+  }
   .admin-toggle{font-size:11px;color:var(--muted);text-decoration:underline;cursor:pointer;margin-top:30px;display:inline-block;}
   .admin-panel{margin-top:12px;}
   textarea{
@@ -213,6 +225,10 @@
 
   <div class="card" id="formCard">
     <h2>Submit your move</h2>
+    <div class="confirm-banner" id="confirmBanner">
+      <div class="checkmark">&#10003;</div>
+      <div id="confirmBannerText"></div>
+    </div>
 
     <label class="field-label">Your team</label>
     <select id="teamSelect">
@@ -327,11 +343,13 @@ let myEntry = null;
 
 const $ = (id) => document.getElementById(id);
 
-function showToast(msg){
+function showToast(msg, type){
   const t = $('toast');
   t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
+  t.className = 'toast show' + (type === 'success' ? ' success' : '');
+  const duration = type === 'success' ? 5000 : 2200;
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>{ t.classList.remove('show'); }, duration);
 }
 
 // ===== Google Sheets backend adapter =====
@@ -616,6 +634,7 @@ function onClaimInput(e){
 function resetForm(){
   selectedTeam = $('teamSelect').value || null;
   claims = [{name:''}];
+  $('confirmBanner').classList.remove('show');
   $('pinSection').style.display = selectedTeam ? 'block':'none';
   $('pinInput').value = '';
   $('rosterSection').style.display = selectedTeam ? 'block':'none';
@@ -702,7 +721,9 @@ async function submitEntry(){
     btn.textContent = originalText;
   }
   if(ok){
-    showToast('Entry submitted');
+    showToast('Entry submitted', 'success');
+    $('confirmBannerText').textContent = `${selectedTeam}'s entry was submitted successfully at ${new Date().toLocaleTimeString()}.`;
+    $('confirmBanner').classList.add('show');
     $('teamSelect').value = '';
     selectedTeam = null;
     claims = [{name:''}];
@@ -1076,7 +1097,9 @@ async function cancelEntry(){
     btn.textContent = originalText;
   }
   if(ok){
-    showToast('Entry cancelled');
+    showToast('Entry cancelled', 'success');
+    $('confirmBannerText').textContent = `${selectedTeam}'s entry was cancelled at ${new Date().toLocaleTimeString()}.`;
+    $('confirmBanner').classList.add('show');
     $('teamSelect').value = '';
     selectedTeam = null;
     claims = [{name:''}];
