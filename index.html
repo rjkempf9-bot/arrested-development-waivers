@@ -718,14 +718,19 @@ async function submitEntry(){
   }
 }
 
+// Throws on a genuine fetch failure instead of masking it as an empty list,
+// so the reveal view can tell 'nobody submitted' apart from 'couldn't check'.
 async function loadEntriesForPeriod(periodId){
-  const keys = await storageList(`entry:${periodId}:`, true);
+  const url = `${WEBAPP_URL}?action=list&prefix=${encodeURIComponent('entry:' + periodId + ':')}` +
+    (window.__sessionAuditCode ? `&auditCode=${encodeURIComponent(window.__sessionAuditCode)}` : '');
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('bad response: ' + res.status);
+  const data = await res.json();
+  const keys = data.keys || [];
   const entries = [];
-  if(keys){
-    for(const k of keys){
-      const raw = await storageGet(k, true);
-      if(raw) entries.push(JSON.parse(raw));
-    }
+  for(const k of keys){
+    const raw = await storageGet(k, true);
+    if(raw) entries.push(JSON.parse(raw));
   }
   entries.sort((a,b)=>a.owner.localeCompare(b.owner));
   return entries;
@@ -761,7 +766,13 @@ async function renderReveal(){
     return;
   }
   area.innerHTML = '<div class="locked-banner">Loading entries&hellip;</div>';
-  const entries = await loadEntriesForPeriod(currentPeriod.id);
+  let entries;
+  try {
+    entries = await loadEntriesForPeriod(currentPeriod.id);
+  } catch(e) {
+    area.innerHTML = '<div class="locked-banner" style="border-color:var(--scarlet);"><i>&#9888;</i>&nbsp; Could not load results right now — this does not mean no one submitted. Try refreshing the page.</div>';
+    return;
+  }
   if(entries.length===0){
     area.innerHTML = '<div class="locked-banner">No entries were submitted this period.</div>';
     return;
@@ -848,7 +859,13 @@ function findPossibleDuplicateNames(names){
 async function checkDuplicateWriteins(){
   const box = $('dupWarningBox');
   if(!box) return;
-  const entries = await loadEntriesForPeriod(currentPeriod.id);
+  let entries;
+  try {
+    entries = await loadEntriesForPeriod(currentPeriod.id);
+  } catch(e) {
+    box.innerHTML = '';
+    return;
+  }
   let allNames = [];
   entries.forEach(e=>{
     if(e.claims) allNames = allNames.concat(e.claims);
@@ -879,7 +896,13 @@ async function computeRosterChanges(){
 async function previewApply(){
   const area = $('applyPreviewArea');
   area.innerHTML = '<div class="locked-banner">Computing…</div>';
-  const changes = await computeRosterChanges();
+  let changes;
+  try {
+    changes = await computeRosterChanges();
+  } catch(e) {
+    area.innerHTML = '<div class="locked-banner" style="border-color:var(--scarlet);"><i>&#9888;</i>&nbsp; Could not load entries right now — try again rather than assuming there are none.</div>';
+    return;
+  }
   if(changes === null){
     area.innerHTML = '<div class="locked-banner">No waiver order saved for this period yet — save one above first.</div>';
     return;
