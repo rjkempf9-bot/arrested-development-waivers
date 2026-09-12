@@ -384,23 +384,51 @@ async function storageDelete(key, shared){
 
 function normName(n){ return n.toLowerCase().replace(/[^a-z]/g,''); }
 
+// Unlike storageGet (which returns null both when a key is genuinely absent
+// AND when the fetch itself fails, so callers can't tell the difference),
+// this distinguishes the two — it throws on a real fetch/network failure
+// instead of silently returning null. This matters specifically for bootstrap
+// data (league data, periods): treating a failed request as "nothing saved
+// yet" would overwrite real server data with stale local defaults, which is
+// exactly the bug that once wiped out a saved period.
+async function storageGetStrict_(key){
+  const url = `${WEBAPP_URL}?action=get&key=${encodeURIComponent(key)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('bad response: ' + res.status);
+  const data = await res.json();
+  return data.value != null ? data.value : null;
+}
+
 async function loadLeagueData(){
-  const stored = await storageGet('leaguedata', true);
-  if(stored){
-    leagueData = JSON.parse(stored);
-  } else {
+  try {
+    const stored = await storageGetStrict_('leaguedata');
+    if(stored){
+      leagueData = JSON.parse(stored);
+      return;
+    }
+    // Genuinely nothing saved yet — safe to seed defaults.
     leagueData = DEFAULT_DATA;
     await storageSet('leaguedata', JSON.stringify(leagueData), true);
+  } catch(e) {
+    // Fetch failed — use defaults for THIS session only. Never write back,
+    // since that could clobber real saved data with a stale local copy.
+    leagueData = DEFAULT_DATA;
+    console.error('Could not load league data from server; using local fallback without saving.', e);
   }
 }
 
 async function loadPeriods(){
-  const stored = await storageGet('periods', true);
-  if(stored){
-    periods = JSON.parse(stored);
-  } else {
+  try {
+    const stored = await storageGetStrict_('periods');
+    if(stored){
+      periods = JSON.parse(stored);
+      return;
+    }
     periods = DEFAULT_PERIODS;
     await storageSet('periods', JSON.stringify(periods), true);
+  } catch(e) {
+    periods = DEFAULT_PERIODS;
+    console.error('Could not load periods from server; using local fallback without saving.', e);
   }
 }
 
